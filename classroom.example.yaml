@@ -1,0 +1,54 @@
+# .classroom.yaml — one per course, in that course's instructor repo.
+# The only course-specific file; everything else in this repo is shared.
+
+org:        bu-bioinfo-classrooms   # forced: BU IT allows one org under the enterprise licence
+classroom:  bf550-fall-2026         # the TERM belongs in the slug — student repo names are
+                                    # <classroom>-<assignment>-<username> and org-unique, so a
+                                    # slug reused across offerings collides for repeating students
+templates:  bf550-ps                # → bf550-ps01 … bf550-ps12, term-free and republished
+branch:     main
+
+# {NN} is the zero-padded set number, everywhere.
+source_dir: assignments/ps{NN}
+sidecar:    assignments/ps{NN}.md   # gets `published:` written back; skipped if absent
+
+# The ONLY files that may be published. Anything else in source_dir is private by
+# default — the same discipline Classroom50's own Pages publisher uses.
+#
+# NEVER add .github/workflows/autograde.yaml: the shim is written by `gh student
+# accept` and a template copy would be clobbered by submit's .github/ re-fetch.
+publish:
+  - README.md
+  - ps{NN}.ipynb
+  - pull_request_template.md        # becomes the Feedback PR body
+
+# Run before a publish is allowed; non-zero blocks it. These belong to the course,
+# not to this tooling — bf550's lock rules are bf550's.
+gates:
+  - python3 tools/test_tools.py
+  - python3 tools/notebook_lock.py check {source_dir}/ps{NN}.ipynb
+
+# Instructor-only vocabulary (AUTHORING.md convention 2). Refuses the publish if
+# any appears in the assembled payload, so a mis-edited whitelist still cannot leak
+# a sidecar. Deliberately NOT seal/unseal/divergence — those are taught to students.
+deny_markers:
+  - INSTRUCTOR
+  - planted defect
+  - verified numbers
+  - never released
+  - not shown to students
+  - quietly load-bearing
+  - hinge
+  - over-provision
+
+# Passed through to `gh teacher assignment add`.
+assignment:
+  name:            "Problem Set {N}"
+  submission_mode: tag              # plain pushes cost no Actions minutes; students tag to submit
+  feedback_pr:     true             # long-lived PR on the starter→submission diff — the grading surface
+  repo_visibility: private
+  runtime:         runtime.json     # relative to source_dir; pins Python + pytest-bdd
+  tests:           tests.json       # relative to source_dir; the mechanical floor only
+  allowed_files:                    # what counts as the submission
+    - "*"
+    - "!impl_ours.py"               # our reference implementation is ours, not their work

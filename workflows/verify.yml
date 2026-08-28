@@ -1,0 +1,54 @@
+# Copy to .github/workflows/verify.yml in a course's instructor repo.
+#
+# Verifies; never publishes. On pull_request rather than push because instructor
+# repos may live in a free org, where private-repo Actions minutes are capped.
+name: Verify
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: pip install --quiet pyyaml pytest pytest-bdd nbformat nbclient ipykernel numpy
+
+      - name: Fetch publishing tools
+        run: |
+          git clone --depth 1 --branch v1 \
+            https://github.com/bu-bioinfo-classrooms/bu-bioinfo-classrooms-tools.git \
+            "$RUNNER_TEMP/tools"
+
+      - name: Course invariants
+        run: |
+          set -euo pipefail
+          [ -f tools/test_tools.py ] && python3 tools/test_tools.py || echo "no tools/test_tools.py"
+
+      # Release-checklist item 1, the most laborious item on the list and previously
+      # unenforced: every set's notebook runs clean with the reference implementation,
+      # and the PROVIDED scenarios fail with a deliberately wrong one. A provided
+      # scenario that cannot fail is not a test, and that is only discovered by
+      # breaking the code under it.
+      - name: Execute every notebook, twice
+        run: python3 "$RUNNER_TEMP/tools/verify_notebooks.py" --config .classroom.yaml
+
+      # Proves each set would publish cleanly -- gates, whitelist, deny-markers --
+      # without pushing anything.
+      - name: Publish dry-run for every authored set
+        run: |
+          set -euo pipefail
+          for n in $(seq 1 12); do
+            nn=$(printf "%02d" "$n")
+            [ -d "assignments/ps$nn" ] || continue
+            echo "::group::set $n"
+            python3 "$RUNNER_TEMP/tools/publish_set.py" --config .classroom.yaml --set "$n" --dry-run
+            echo "::endgroup::"
+          done

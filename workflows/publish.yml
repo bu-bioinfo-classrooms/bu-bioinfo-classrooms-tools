@@ -1,0 +1,87 @@
+# Copy to .github/workflows/publish.yml in a course's instructor repo.
+#
+# workflow_dispatch only, one set at a time. Never on push: a publish is
+# outward-facing and hard to reverse, and a typo fix in a document should not
+# republish live materials mid-week.
+#
+# Registration IS the seal. `--available-from` is listing-only, not access
+# control, so an assignment that exists can be accepted by anyone who guesses the
+# slug. Registering only at release means next week's materials do not exist yet.
+name: Publish a set
+
+on:
+  workflow_dispatch:
+    inputs:
+      set:
+        description: "Set number (1-12)"
+        required: true
+        type: string
+      due:
+        description: "Due date, e.g. 2026-09-21T23:59:00-04:00 (optional)"
+        required: false
+        type: string
+      register:
+        description: "Also register the assignment in classroom50"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write          # to write `published:` back into the sidecar
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Requires a reviewer before the job runs. Configure under
+    # Settings -> Environments -> publish -> Required reviewers.
+    environment: publish
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: |
+          pip install --quiet pyyaml pytest pytest-bdd nbformat nbclient ipykernel numpy
+          gh extension install foundation50/gh-teacher
+        env:
+          GH_TOKEN: ${{ secrets.CLASSROOM_TOKEN }}
+
+      - name: Fetch publishing tools
+        run: |
+          git clone --depth 1 --branch v1 \
+            https://github.com/bu-bioinfo-classrooms/bu-bioinfo-classrooms-tools.git \
+            "$RUNNER_TEMP/tools"
+
+      # Gates, whitelist, deny-markers, then replace the template's tree.
+      - name: Publish the template
+        env:
+          GH_TOKEN: ${{ secrets.CLASSROOM_TOKEN }}
+        run: |
+          python3 "$RUNNER_TEMP/tools/publish_set.py" \
+            --config .classroom.yaml --set "${{ inputs.set }}"
+
+      - name: Register the assignment
+        if: ${{ inputs.register }}
+        env:
+          GH_TOKEN: ${{ secrets.CLASSROOM_TOKEN }}
+        run: |
+          python3 "$RUNNER_TEMP/tools/update_classroom.py" \
+            --config .classroom.yaml --set "${{ inputs.set }}" \
+            ${{ inputs.due && format('--due {0}', inputs.due) || '' }}
+
+      # The sidecar now records which template commit this set is live at -- the
+      # version pinning a submodule would have given, without a second copy of the
+      # notebook in the tree.
+      - name: Record the published SHA
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "no sidecar change to record"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Record set ${{ inputs.set }} as published"
+          git push
