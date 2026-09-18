@@ -41,7 +41,10 @@ def build_args(cfg, nn, n, due):
     source_dir = pathlib.Path(expand(cfg["source_dir"], nn=nn, n=n))
     argv = [
         "gh", "teacher", "assignment", "add",
-        cfg["org"], cfg["classroom"], f"ps{nn}",
+        # The slug is the template repo's name (course-prefixed, e.g. bf550-ps02): the org
+        # holds several courses' sets in one flat namespace, so a bare psNN collides, and a
+        # re-add under a different slug creates a second entry instead of replacing the live one.
+        cfg["org"], cfg["classroom"], f"{cfg['templates']}{nn}",
         "--name", expand(a.get("name", "Problem Set {N}"), nn=nn, n=n),
         "--template", f"{cfg['org']}/{cfg['templates']}{nn}",
     ]
@@ -110,7 +113,7 @@ def main():
         print("\n--dry-run: classroom50 not touched")
         return
     run_with_retry(argv)
-    print(f"\nregistered ps{nn} in {cfg['org']}/classroom50/{cfg['classroom']}")
+    print(f"\nregistered {cfg['templates']}{nn} in {cfg['org']}/classroom50/{cfg['classroom']}")
 
 
 if __name__ == "__main__":
