@@ -49,6 +49,10 @@ assignment:
   repo_visibility: private
   runtime:         runtime.json     # relative to source_dir; pins Python + pytest-bdd
   tests:           tests.json       # relative to source_dir; the mechanical floor only
-  allowed_files:                    # what counts as the submission
-    - "*"
-    - "!impl_ours.py"               # our reference implementation is ours, not their work
+  # allowed_files: gitignore syntax read as an ALLOW list -- a path is allowed when git
+  # would NOT ignore it. Omitted (the default here) means every file is the submission.
+  # To exclude one file, the whole list is that one pattern:
+  #   allowed_files:
+  #     - impl_ours.py                # our reference implementation is ours, not their work
+  # NEVER write `*` then `!impl_ours.py`: that allows ONLY impl_ours.py, and
+  # `gh student submit` then pushes a commit deleting every other file (bf550, 18 Sep 2026).
